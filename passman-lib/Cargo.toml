@@ -1,0 +1,13 @@
+[package]
+name = "passman-lib"
+version = "0.1.0"
+authors = ["Johan Burke <jburke4126@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[dependencies.rusqlcipher]
+version = "0.14.9"
+features = ["sqlcipher"]
