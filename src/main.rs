@@ -2,7 +2,7 @@ extern crate passman_lib;
 
 use passman_lib::pm::recordstore;
 use passman_lib::pm::store_io::{
-    RecordStoreWriter, JsonWriter};
+    RecordStoreWriter, JsonWriter, NullWriter};
 
 fn main() {
     let mut record_store = recordstore::RecordStore::new();
@@ -14,7 +14,9 @@ fn main() {
 
     let mut writer = JsonWriter::new();
 
-    writer.write(&record_store);
+    writer.write(&record_store, &mut NullWriter::new());
 
-    println!("{}", writer.get_output());
+    if let Some(output) = writer.get_output() {
+        println!("{}", output);
+    }
 }
