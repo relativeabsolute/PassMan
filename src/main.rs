@@ -1,6 +1,8 @@
 extern crate passman_lib;
 
 use passman_lib::pm::recordstore;
+use passman_lib::pm::store_io::{
+    RecordStoreWriter, JsonWriter};
 
 fn main() {
     let mut record_store = recordstore::RecordStore::new();
@@ -10,5 +12,9 @@ fn main() {
     record_store.add_field("record_name",
         recordstore::Field(String::from("blah"), String::from("blahblah")));
 
-    println!("{:?}", record_store);
+    let mut writer = JsonWriter::new();
+
+    writer.write(&record_store);
+
+    println!("{}", writer.get_output());
 }

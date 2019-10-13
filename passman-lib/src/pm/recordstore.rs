@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt;
 
 pub struct Field(pub String, pub String);
 
@@ -24,5 +23,9 @@ impl RecordStore {
             let Field(name, val) = field;
             fields.insert(name, val);
         }
+    }
+
+    pub fn items(&self) -> &HashMap<String, HashMap<String, String>> {
+        &self.records
     }
 }
