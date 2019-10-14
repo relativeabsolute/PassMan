@@ -1,3 +1,5 @@
+#![feature(inner_deref)]
+
 extern crate itertools;
 
 use crate::pm::recordstore::RecordStore;
@@ -8,14 +10,22 @@ use std::path::Path;
 use std::error::Error;
 use std::io::prelude::*;
 
+
 // TODO: this can probably be generalized further via closures to avoid an if let
-fn apply_decorator<'a, T: RecordStoreWriter>(records: &RecordStore,
-    decorator: &'a mut T) -> Option<&'a str> {
+fn apply_decorator<'a, T: RecordStoreWriter, F>(records: &RecordStore,
+    decorator: &'a mut T, behavior: F) -> Option<String> 
+    where F: Fn(&RecordStore) -> Option<String> {
         let mut nw = NullWriter::new();
         decorator.write(records, &mut nw);
-        decorator.get_output()
+        if let Some(str_output) = decorator.get_output() {
+            Some(String::from(str_output))
+        } else {
+            behavior(records)
+        }
 }
 
+// usage: create writer that will be at the end of the chain
+// writers are executed earlier the more nested they are
 pub trait RecordStoreWriter {
     fn new() -> Self;
 
@@ -43,7 +53,7 @@ impl RecordStoreWriter for NullWriter {
 
 pub struct FileWriter {
     file_name: String,
-    output: String
+    output: Option<String>
 }
 
 impl FileWriter {
@@ -59,71 +69,83 @@ impl FileWriter {
 impl RecordStoreWriter for FileWriter {
     fn new() -> FileWriter {
         FileWriter { file_name: String::new(),
-            output: String::new() }
+            output: None }
     }
 
-    // TODO: fill this in 
     fn get_output(&self) -> Option<&str> {
-        Some(&self.output)
+        self.output.as_deref()
     }
 
     // TODO: get this writing to a file
     fn write<T : RecordStoreWriter>(&mut self,
         records: &RecordStore, decorator: &mut T) {
-        if let Some(dec_output) = apply_decorator(records, decorator) {
-            self.output = String::from(dec_output);
-        } else {
-            self.output = format!("{:?}", records);
+        self.output = apply_decorator(records, decorator,
+            |r| Some(format!("{:?}", r)));
+        if let Some(output_str) = &self.output {
+            // TODO: check IO result
+            macros::write_all_to_file(&self.file_name, &output_str);
         }
-        macros::write_all_to_file(&self.file_name, &self.output);
     }
 }
 
 pub struct JsonWriter {
-    output: String
+    output: Option<String>
 }
 
 impl RecordStoreWriter for JsonWriter {
     fn new() -> JsonWriter {
-        JsonWriter { output: String::new() }
+        JsonWriter { output: None }
     }
 
     fn get_output(&self) -> Option<&str> {
-        Some(&self.output)
+        self.output.as_deref()
     }
 
     fn write<T: RecordStoreWriter>(&mut self,
         records: &RecordStore, decorator: &mut T) {
-        let mut result = String::new();
-        result += "{";
-        for (string, fields) in records.items() {
-            result += &format!("\"{}\":", string);
+        fn to_json(r: &RecordStore) -> Option<String> {
+            let mut result = String::new();
             result += "{";
-            result += &fields.iter()
-                .map(|(field_name, field_val)|
-                    format!("\"{}\": \"{}\"", field_name, field_val))
-                .join(",");
+            for (string, fields) in r.items() {
+                result += &format!("\"{}\":", string);
+                result += "{";
+                result += &fields.iter()
+                    .map(|(field_name, field_val)|
+                        format!("\"{}\": \"{}\"", field_name, field_val))
+                    .join(",");
+                result += "}";
+            }
             result += "}";
+            Some(result)
         }
-        result += "}";
-        self.output = result;
+        // TODO: determine if there are cases where we want to
+        // format as JSON in addition to decorator, rather than
+        // either or
+        self.output = apply_decorator(records,
+            decorator, to_json);
     }
 }
 
-pub struct ConsoleWriter {}
+pub struct ConsoleWriter {
+    output: Option<String>
+}
 
 impl RecordStoreWriter for ConsoleWriter {
     fn new() -> ConsoleWriter {
-        ConsoleWriter {}
+        ConsoleWriter {
+            output: None
+        }
     }
 
-    // TODO: fill this in 
     fn get_output(&self) -> Option<&str> {
-        Some("")
+        self.output.as_deref()
     }
 
     fn write<T: RecordStoreWriter>(&mut self,
         records: &RecordStore, decorator: &mut T) {
-        println!("{:?}", records);
+        self.output = apply_decorator(records, decorator,
+            |r| Some(format!("{:?}", r)));
+        // should be guaranteed to unwrap
+        println!("{}", self.get_output().unwrap());
     }
 }
